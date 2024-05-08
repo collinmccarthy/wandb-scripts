@@ -1,6 +1,10 @@
 """
 Delete files from old Wandb projects to clean up space.
 
+Author:
+Collin McCarthy
+https://github.com/collinmccarthy/wandb-scripts
+
 Examples:
 - Delete all checkpoints
     ```

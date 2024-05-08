@@ -1,6 +1,10 @@
 """
 Merge multiple Wandb runs into a single run.
 
+Author:
+Collin McCarthy
+https://github.com/collinmccarthy/wandb-scripts
+
 Examples:
 - Merge runs with names `my_run` and `my_other_run`
     ```
