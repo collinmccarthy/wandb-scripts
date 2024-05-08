@@ -1,2 +1,2 @@
-# wandb-scripts
-Wandb scripts
+# Wandb Scripts
+Collection of Wandb scripts. Contributions welcome!
