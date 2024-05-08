@@ -56,6 +56,7 @@ Examples:
 - Delete all checkpoints
 
 ```bash
+# Specify $WANDB_ENTITY, $WANDB_PROJECT
 python tools/wandb/wandb_update.py \
 --wandb-entity=$WANDB_ENTITY \
 --wandb-project=$WANDB_PROJECT \
@@ -65,6 +66,7 @@ python tools/wandb/wandb_update.py \
 - Delete all bbox and segm checkpoints in runs matching 'r50_.\*\_coco_.*'
 
 ```bash
+# Specify $WANDB_ENTITY, $WANDB_PROJECT
 python tools/wandb/wandb_update.py \
 --wandb-entity=$WANDB_ENTITY \
 --wandb-project=$WANDB_PROJECT \
@@ -75,6 +77,7 @@ python tools/wandb/wandb_update.py \
 - Delete all files in folder 'predictions/' for all runs except runs matching 'r50_.\*\_coco_.*'
 
 ```bash
+# Specify $WANDB_ENTITY, $WANDB_PROJECT
 python tools/wandb/wandb_update.py \
 --wandb-entity=$WANDB_ENTITY \
 --wandb-project=$WANDB_PROJECT \
@@ -85,6 +88,7 @@ python tools/wandb/wandb_update.py \
 - Delete all artifacts ending in '_pred_final' for all runs except runs matching 'r50_.\*\_coco_.*'
 
 ```bash
+# Specify $WANDB_ENTITY, $WANDB_PROJECT
 python tools/wandb/wandb_update.py \
 --wandb-entity=$WANDB_ENTITY \
 --wandb-project=$WANDB_PROJECT \
