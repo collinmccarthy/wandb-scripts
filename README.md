@@ -13,7 +13,10 @@ pip install -r requirements.txt
 ## Merge Runs
 
 - Source: [wandb_merge.py](./wandb_merge.py)
-- Merge runs that were accidentally split up into a single run
+- Merge runs that were accidentally split into a *new run*
+
+Notes:
+- Original run will not be modified except by adding a tag (see `--tag_partial_runs`, default `partial-run`)
 - If using mmdetection, `$SAVE_DIR` defaults to the original save dir (`work_dir` in mmdetection)
 - Examples use `--verify-overlap-metric=iter` which assumes `iter` has unique values for all runs
     - May need to change to something like `epoch` if iter has duplicate values in multiple runs
@@ -47,7 +50,7 @@ python tools/wandb/wandb_merge.py \
 ## Delete Files / Artifacts
 
 - Source: [wandb_update.py](./wandb_update.py)
-- Currently used to delete files and/or artifacts from multiple runs
+- Delete files and/or artifacts from multiple runs
 
 Examples:
 - Delete all checkpoints
