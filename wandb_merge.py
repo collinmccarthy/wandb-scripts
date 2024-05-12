@@ -8,7 +8,7 @@ https://github.com/collinmccarthy/wandb-scripts
 Examples:
 - Merge runs with names `my_run` and `my_other_run`
     ```
-    python tools/wandb/wandb_merge.py \
+    python wandb_merge.py \
     --wandb-entity=$WANDB_ENTITY \
     --wandb-project=$WANDB_PROJECT \
     --merge_run_save_dir=$SAVE_DIR \
@@ -18,7 +18,7 @@ Examples:
 
 - Merge runs with run ids `1234` and `5678`
     ```
-    python tools/wandb/wandb_merge.py \
+    python wandb_merge.py \
     --wandb-entity=$WANDB_ENTITY \
     --wandb-project=$WANDB_PROJECT \
     --merge_run_save_dir=$SAVE_DIR \
@@ -382,12 +382,15 @@ def merge_runs(args: Namespace) -> None:
         # Update tags for new run, adding new tags and --tag-combined-run
         partial_run_tags = _get_run_tags(partial_run)
         combined_run_tags = _get_run_tags(combined_run)
-        add_combined_run_tags = [tag for tag in partial_run_tags if tag not in combined_run_tags]
+        add_combined_run_tags = [
+            tag for tag in partial_run_tags if tag not in [combined_run_tags, args.tag_partial_runs]
+        ]
         combined_run.tags = combined_run_tags + add_combined_run_tags
 
         # Update tags for old run, adding --tag-partial-runs
-        partial_run.tags = partial_run_tags + [args.tag_partial_runs]
-        partial_run.update()
+        if args.tag_partial_runs not in partial_run_tags:
+            partial_run.tags = partial_run_tags + [args.tag_partial_runs]
+            partial_run.update()
 
         # Overwrite previous run summary
         for key, val in tqdm(
