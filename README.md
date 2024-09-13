@@ -27,7 +27,7 @@ Examples:
 
 ```bash
 # Set WANDB_ENTITY, WANDB_PROJECT, SAVE_DIR
-python tools/wandb/wandb_merge.py \
+python wandb_merge.py \
 --wandb-entity=$WANDB_ENTITY \
 --wandb-project=$WANDB_PROJECT \
 --merge_run_save_dir=$SAVE_DIR \
@@ -39,7 +39,7 @@ python tools/wandb/wandb_merge.py \
 
 ```bash
 # Specify $WANDB_ENTITY, $WANDB_PROJECT, $SAVE_DIR
-python tools/wandb/wandb_merge.py \
+python wandb_merge.py \
 --wandb-entity=$WANDB_ENTITY \
 --wandb-project=$WANDB_PROJECT \
 --merge_run_save_dir=$SAVE_DIR \
@@ -57,7 +57,7 @@ Examples:
 
 ```bash
 # Specify $WANDB_ENTITY, $WANDB_PROJECT
-python tools/wandb/wandb_update.py \
+python wandb_update.py \
 --wandb-entity=$WANDB_ENTITY \
 --wandb-project=$WANDB_PROJECT \
 --delete_filename_regex=".*\.pth"
@@ -67,7 +67,7 @@ python tools/wandb/wandb_update.py \
 
 ```bash
 # Specify $WANDB_ENTITY, $WANDB_PROJECT
-python tools/wandb/wandb_update.py \
+python wandb_update.py \
 --wandb-entity=$WANDB_ENTITY \
 --wandb-project=$WANDB_PROJECT \
 --delete_filename_regex '.*_segm_.*\.pth' '.*_bbox_.*\.pth' \
@@ -78,7 +78,7 @@ python tools/wandb/wandb_update.py \
 
 ```bash
 # Specify $WANDB_ENTITY, $WANDB_PROJECT
-python tools/wandb/wandb_update.py \
+python wandb_update.py \
 --wandb-entity=$WANDB_ENTITY \
 --wandb-project=$WANDB_PROJECT \
 --delete_filename_regex="^predictions/.*" \
@@ -89,9 +89,14 @@ python tools/wandb/wandb_update.py \
 
 ```bash
 # Specify $WANDB_ENTITY, $WANDB_PROJECT
-python tools/wandb/wandb_update.py \
+python wandb_update.py \
 --wandb-entity=$WANDB_ENTITY \
 --wandb-project=$WANDB_PROJECT \
 --delete-artifact-regex=".*_pred_final" \
 --skip-run-names-regex 'r50_.*_coco.*'
 ```
+
+## TODOs
+
+- [ ] Create `common.py` and move any common logic to this file, e.g. parser, API calls, etc.
+- [ ] Update README

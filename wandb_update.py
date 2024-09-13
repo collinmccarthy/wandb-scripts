@@ -8,14 +8,14 @@ https://github.com/collinmccarthy/wandb-scripts
 Examples:
 - Delete all checkpoints
     ```
-    python tools/wandb/wandb_update.py \
+    python wandb_update.py \
     --wandb-entity=$WANDB_ENTITY \
     --wandb-project=$WANDB_PROJECT \
     --delete_filename_regex=".*\.pth"
     ```
 - Delete all bbox and segm checkpoints for runs matching 'm2f_.*_city_.*'
     ```
-    python tools/wandb/wandb_update.py \
+    python wandb_update.py \
     --wandb-entity=$WANDB_ENTITY \
     --wandb-project=$WANDB_PROJECT \
     --delete_filename_regex '.*_segm_.*\.pth' '.*_bbox_.*\.pth' \
@@ -23,7 +23,7 @@ Examples:
     ```
 - Delete all files in folder 'predictions/', except for runs matching 'm2f_.*_city_.*'
     ```
-    python tools/wandb/wandb_update.py \
+    python wandb_update.py \
     --wandb-entity=$WANDB_ENTITY \
     --wandb-project=$WANDB_PROJECT \
     --delete_filename_regex="^predictions/.*" \
@@ -31,7 +31,7 @@ Examples:
     ```
 - Delete all artifacts ending in '_pred_final', except for run $SKIP_RUN
     ```
-    python tools/wandb/wandb_update.py \
+    python wandb_update.py \
     --wandb-entity=$WANDB_ENTITY \
     --wandb-project=$WANDB_PROJECT \
     --delete-artifact-regex=".*_pred_final" \

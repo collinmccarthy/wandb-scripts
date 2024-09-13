@@ -52,7 +52,7 @@ def parse_args() -> Namespace:
     parser.add_argument(
         "--wandb-entity",
         "--wandb_entity",
-        required=True,
+        default=os.environ.get("WANDB_ENTITY", None),
         help="Wandb entity name (e.g. username or team name)",
     )
     parser.add_argument(
@@ -131,22 +131,24 @@ def parse_args() -> Namespace:
     )
     args = parser.parse_args()
 
-    if len(args.wandb_entity) == 0:
+    if args.wandb_entity is None or len(args.wandb_entity) == 0:
         raise RuntimeError(f"Found empty string for --wandb-entity")
 
-    if len(args.wandb_project) == 0:
+    if args.wandb_project is None or len(args.wandb_project) == 0:
         raise RuntimeError(f"Found empty string for --wandb-project")
 
     if args.merge_run_save_dir is not None and len(args.merge_run_save_dir) == 0:
         raise RuntimeError(f"Found empty string for --merge-run-save-dir")
 
     if len(args.run_names) == 0 and len(args.run_ids) == 0:
-        raise RuntimeError(f"Expected either --run-names or --run-ids to query runs to merge")
+        raise RuntimeError(
+            f"Expected either --run-names or --run-ids to query runs to merge"
+        )
 
     return args
 
 
-def _get_run_tags(run: SdkRun) -> list[str]:
+def _get_run_tags(run: Union[ApiRun, SdkRun]) -> list[str]:
     if isinstance(run.tags, str):
         return [run.tags]
     elif isinstance(run.tags, Iterable):
@@ -155,20 +157,22 @@ def _get_run_tags(run: SdkRun) -> list[str]:
         return []
 
 
-def _backup_wandb_resume(save_dir: Path) -> None:
+def _backup_wandb_resume(save_dir: Union[Path, str]) -> None:
     wandb_resume = Path(save_dir, "wandb", "wandb-resume.json")
     wandb_resume_backup = Path(save_dir, "wandb", "wandb-resume_backup.json")
     if wandb_resume.exists():
-        print(f"Backing up current resume file: {wandb_resume} -> {wandb_resume_backup}")
+        print(
+            f"Backing up current resume file: {wandb_resume} -> {wandb_resume_backup}"
+        )
         shutil.copyfile(wandb_resume, wandb_resume_backup)
         wandb_resume.unlink()
 
 
 def _remove_prefix_dir(filepath: Path, prefix_dir: Path) -> Path:
-    filepath: str = str(filepath).replace(str(prefix_dir), "")
-    if filepath.startswith(os.sep):
-        filepath = filepath[len(os.sep) :]
-    return Path(filepath)
+    filepath_no_prefix = str(filepath).replace(str(prefix_dir), "")
+    if filepath_no_prefix.startswith(os.sep):
+        filepath_no_prefix = filepath_no_prefix[len(os.sep) :]
+    return Path(filepath_no_prefix)
 
 
 def _find_wandb_dir(save_dir: Path) -> Optional[Path]:
@@ -213,7 +217,7 @@ def _find_wandb_dir(save_dir: Path) -> Optional[Path]:
     elif len(wandb_dirs) == 1:
         save_dir = wandb_dirs[0].parent
     else:
-        wandb_dirs_str = "\n  " + "\n  ".join(wandb_dirs)
+        wandb_dirs_str = "\n  " + "\n  ".join([str(d) for d in wandb_dirs])
         raise RuntimeError(
             f"Found {len(wandb_dirs)} 'wandb' subdirs in work_dir={str(save_dir)}, expected 1."
             f"\nSubdirs: {wandb_dirs_str}"
@@ -242,7 +246,9 @@ def merge_runs(args: Namespace) -> None:
             continue
 
         if args.skip_run_tags is not None:
-            matching_tags = [tag for tag in args.skip_run_tags if tag in _get_run_tags(run)]
+            matching_tags = [
+                tag for tag in args.skip_run_tags if tag in _get_run_tags(run)
+            ]
             if len(matching_tags) > 0:
                 continue
 
@@ -250,7 +256,9 @@ def merge_runs(args: Namespace) -> None:
             matching_runs.append(run)
 
     if len(matching_runs) < 2:
-        print(f"Found {len(matching_runs)} matching runs. Need >= 2 runs to merge, skipping merge.")
+        print(
+            f"Found {len(matching_runs)} matching runs. Need >= 2 runs to merge, skipping merge."
+        )
         return
 
     print(
@@ -377,19 +385,27 @@ def merge_runs(args: Namespace) -> None:
         header = f"[Run {idx + 1}/{len(matching_runs)}]"
 
         # Update config
-        wandb.config.update(partial_run.config, allow_val_change=True)
+        wandb.config.update(
+            partial_run.config, allow_val_change=True
+        )  # pyright: ignore[reportCallIssue]
 
         # Update tags for new run, adding new tags and --tag-combined-run
         partial_run_tags = _get_run_tags(partial_run)
         combined_run_tags = _get_run_tags(combined_run)
         add_combined_run_tags = [
-            tag for tag in partial_run_tags if tag not in [combined_run_tags, args.tag_partial_runs]
+            tag
+            for tag in partial_run_tags
+            if tag not in [combined_run_tags, args.tag_partial_runs]
         ]
         combined_run.tags = combined_run_tags + add_combined_run_tags
 
         # Update tags for old run, adding --tag-partial-runs
         if args.tag_partial_runs not in partial_run_tags:
-            partial_run.tags = partial_run_tags + [args.tag_partial_runs]
+            # Don't see 'tags' attribute in apis.public.runs.Run but docs say this is valid
+            # See https://docs.wandb.ai/guides/app/features/tags
+            # fmt: off
+            partial_run.tags = partial_run_tags + [args.tag_partial_runs]  # pyright: ignore[reportAttributeAccessIssue]
+            # fmt: on
             partial_run.update()
 
         # Overwrite previous run summary
@@ -419,7 +435,9 @@ def merge_runs(args: Namespace) -> None:
                 draft_artifact = saved_artifact.new_draft()
                 print(f"Logging artifact {artifact.name}")
                 wandb.log_artifact(draft_artifact)
-            except ValueError as e:  # If type is `wandb-`, e.g. `wandb-history`, it's reserved
+            except (
+                ValueError
+            ) as e:  # If type is `wandb-`, e.g. `wandb-history`, it's reserved
                 if "reserved for internal use" in str(e):
                     pass
 
@@ -433,13 +451,14 @@ def merge_runs(args: Namespace) -> None:
             wandb.save(filepath, base_path=Path(filepath).parent, policy="end")
 
     # Add list of merged runs to run summary
+    assert wandb.run is not None
     wandb.run.summary["merged_run_ids"] = [run.id for run in matching_runs]
 
     # Mark run as finished with exit code according to the state of the last run
     last_state = matching_runs[-1].state
     exit_code = 0 if last_state == "finished" else 1
     if last_state == "preempted":
-        wandb.mark_preempting()
+        combined_run.mark_preempting()
     wandb.finish(exit_code=exit_code)
 
 
