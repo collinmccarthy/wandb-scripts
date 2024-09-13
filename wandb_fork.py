@@ -145,7 +145,7 @@ def parse_args() -> Namespace:
 
     args = parser.parse_args()
 
-    if not sum([val is not None for val in (args.run_id, args.run_name)]) == 1:
+    if not sum([args.run_id, args.run_name]) == 1:
         raise RuntimeError(f"Must specify exactly one of --run-id and --run-name")
 
     if args.wandb_entity is None or len(args.wandb_entity) == 0:

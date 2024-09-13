@@ -9,8 +9,8 @@ Examples:
 - Upload checkpoints
     ```
     python sync_runs.py \
-        --wandb-project=$WANDB_PROJECT \
         --wandb-entity=$WANDB_ENTITY \
+        --wandb-project=$WANDB_PROJECT \
         --results-dir=<PARENT_DIR_FOR_ALL_RUNS> \
         --checkpoint-name checkpoint-best.pth \
         --upload-checkpoints
@@ -19,31 +19,47 @@ Examples:
 - Download checkpoints
     ```
     python sync_runs.py \
-        --wandb-project=$WANDB_PROJECT \
         --wandb-entity=$WANDB_ENTITY \
+        --wandb-project=$WANDB_PROJECT \
         --results-dir=<PARENT_DIR_FOR_ALL_RUNS> \
         --checkpoint-name checkpoint-best.pth \
         --download-checkpoints
     ```
 
-- Upload (sync) runs (upload runs)
+- Upload (sync) runs
     - Files previously uploaded (added as symlinks in wandb dir) will be uploaded if symlink exists
     - To upload a new checkpoint, add --checkpoint_name as in uploading checkpoints above
     ```
     python sync_runs.py \
-        --wandb-project=$WANDB_PROJECT \
         --wandb-entity=$WANDB_ENTITY \
+        --wandb-project=$WANDB_PROJECT \
         --results-dir=<PARENT_DIR_FOR_ALL_RUNS> \
-        --run-names
+        --run-names <RUN_NAME_ONE> <RUN_NAME_TWO> \
         --upload-runs \
+    ```
+
+- Upload (sync) runs in a more complicated (typical) scenario:
+    - The wandb dir is stored within a 'wandb_vis' folder: use --wandb-local-prefix-path
+    - There may be duplicates, force run names to match run folder: use --force-run-name-match
+    - There may be missing symlinks, delete them if there are: use --remove-missing-symlinks
+    ```
+    python sync_runs.py \
+        --wandb-entity=$WANDB_ENTITY \
+        --wandb-project=$WANDB_PROJECT \
+        --results-dir=<PARENT_DIR_FOR_ALL_RUNS> \
+        --run-names <RUN_NAME_ONE> <RUN_NAME_TWO> \
+        --upload-runs \
+        --wandb-local-prefix-path="wandb_vis" \
+        --force-run-name-match \
+        --remove-missing-symlinks
     ```
 
 - Download runs
     - Will download all files, don't need --checkpoint_name
     ```
     python sync_runs.py \
-        --wandb-project=$WANDB_PROJECT \
         --wandb-entity=$WANDB_ENTITY \
+        --wandb-project=$WANDB_PROJECT \
         --results-dir=<PARENT_DIR_FOR_ALL_RUNS> \
         --download-runs
     ```
@@ -54,6 +70,8 @@ import os
 import argparse
 import subprocess
 import re
+import warnings
+import pprint
 from argparse import Namespace
 from pathlib import Path
 from typing import List, Union
@@ -70,19 +88,58 @@ def parse_args() -> Namespace:
     parser.add_argument(
         "--wandb-entity",
         "--wandb_entity",
-        required=True,
+        type=str,
+        default=os.environ.get("WANDB_ENTITY", None),
         help="Wandb entity name (e.g. username or team name)",
     )
     parser.add_argument(
         "--wandb-project",
         "--wandb_project",
+        type=str,
         required=True,
         help="Wandb project name",
     )
+
+    # Must pass in either results-dir OR run-dirs
     parser.add_argument(
+        "--results-dir",
         "--results_dir",
-        required=True,
+        type=str,
         help="Path to results dir, parent directory containing all run folders.",
+    )
+    parser.add_argument(
+        "--run-names",
+        "--run_names",
+        type=str,
+        nargs="+",
+        default=None,
+        help=(
+            "Filter project runs to only sync run ids corresponding to these run names"
+            " (if not provided, will sync all)"
+        ),
+    )
+    parser.add_argument(
+        "--run-dirs",
+        "--run_dirs",
+        type=str,
+        nargs="+",
+        default=None,
+        help="Filter project runs to only sync these run dirs",
+    )
+    parser.add_argument(
+        "--force-run-name-match",
+        "--force_run_name_match",
+        action="store_true",
+        help=(
+            "Only sync run directories whose folder names match one of values in --run-names."
+            " This may be necessary if duplicate run folders are found."
+        ),
+    )
+    parser.add_argument(
+        "--remove-missing-symlinks",
+        "--remove_missing_symlinks",
+        action="store_true",
+        help="Remove missing symlinks when uploading runs, to prevent run syncing from failing.",
     )
 
     # Required to set ONE of the following flags
@@ -119,6 +176,7 @@ def parse_args() -> Namespace:
     parser.add_argument(
         "--checkpoint-name",
         "--checkpoint_name",
+        type=str,
         default=None,
         help=(
             "Checkpoint name for uploading/downloading checkpoints, or forcing checkpoint upload"
@@ -128,19 +186,22 @@ def parse_args() -> Namespace:
 
     # General
     parser.add_argument(
+        "--wandb-local-prefix-path",
+        "--wandb_local_prefix_path",
+        type=str,
+        help=(
+            "Additional prefix path for wandb folder. E.g. if within the run directory the wandb"
+            " folder is 'wandb_vis/wandb' then this should be 'wandb_vis'."
+        ),
+    )
+    parser.add_argument(
         "--dry-run",
         "--dry_run",
         action="store_true",
         default=False,
         help="Print the commands but do not run them",
     )
-    parser.add_argument(
-        "--run-names",
-        "--run_names",
-        nargs="+",
-        default=None,
-        help="Filter project runs to only sync these run names (if not provided, will sync all)",
-    )
+
     parser.add_argument(
         "--overwrite-existing",
         "--overwrite_existing",
@@ -149,7 +210,31 @@ def parse_args() -> Namespace:
         help="Overwrite existing files (if False, will skip)",
     )
 
-    args = parser.parse_args(sys.argv[1:])
+    args = parser.parse_args()
+
+    num_flags_set = sum(
+        [
+            args.download_checkpoints,
+            args.download_runs,
+            args.upload_checkpoints,
+            args.upload_runs,
+        ]
+    )
+    if num_flags_set != 1:
+        raise ValueError(
+            "Must specify exactly one of:\n  "
+            "--download_checkpoints, --download_runs, --upload_checkpoints, --upload_runs"
+        )
+
+    if sum([val is not None for val in (args.results_dir, args.run_dirs)]) != 1:
+        raise ValueError(f"Must specify exactly one of --results-dir, --run-dirs")
+
+    if args.wandb_entity is None or len(args.wandb_entity) == 0:
+        raise RuntimeError(f"Missing --wandb-entity (default: $WANDB_ENTITY env var)")
+
+    if args.wandb_project is None or len(args.wandb_project) == 0:
+        raise RuntimeError(f"Missing --wandb-project")
+
     return args
 
 
@@ -171,6 +256,7 @@ def get_matching_runs(args: Namespace) -> tuple[Union[ApiRuns, List[ApiRun]], st
             print(
                 f"Failed to find match for run name / keyword {keyword} in run names: {run_names}"
             )
+            continue
         keep_runs.append(matching_runs[0])
 
     # Verify the runs are still unique
@@ -266,53 +352,156 @@ def upload_checkpoints(args: Namespace):
 def upload_runs(args: Namespace, checkpoints_only: bool = False):
     # NOTE: Should use upload_checkpoints() if checkpoint only, but getting 403 error so added the flag here
 
-    parent_dir = args.results_dir
-    subdirs = [f for f in Path(parent_dir).iterdir() if f.is_dir()]
+    if args.run_dirs is not None:
+        all_run_dirs = [Path(run_dir) for run_dir in args.run_dirs]
+    else:
+        parent_dir = args.results_dir
+        all_run_dirs = [f for f in Path(parent_dir).iterdir() if f.is_dir()]
 
     # Get a mapping from run name to run id (from the runs we have uploaded already)
     runs, _project_str = get_matching_runs(args)
     run_name_to_id = {run.name: run.id for run in runs}
+    run_ids = [run.id for run in runs]
 
     if args.checkpoint_name is None:
-        print(
-            "WARNING: Not creating symbolic link for checkpoints, will sync runs using existing wandb file symlinks"
+        warnings.warn(
+            f"Not creating symbolic link for any new checkpoints, will sync runs using"
+            f" existing wandb file symlinks. To upload new checkpoints during sync, specify"
+            f" --checkpoint-name <name>."
         )
 
-    commands: List[List[str]] = []
-    for subdir in subdirs:
+    if args.wandb_local_prefix_path is not None:
+        if "/" in args.wandb_local_prefix_path:
+            wandb_subdir_paths = args.wandb_local_prefix_path.split("/") + ["wandb"]
+        elif r"\\" in args.wandb_local_prefix_path:
+            wandb_subdir_paths = args.wandb_local_prefix_path.split(r"\\") + ["wandb"]
+        else:
+            wandb_subdir_paths = [args.wandb_local_prefix_path] + ["wandb"]
+    else:
+        wandb_subdir_paths = ["wandb"]
 
-        wandb_run_dir = subdir.joinpath("wandb", "latest-run")
+    # Iterate over all folders and check the run ids for the individual run-* folders
+    # This is more reliable than assuming the folder name matches the run name
+    all_wandb_run_folders: List[List[Path]] = []
+    all_wandb_dirs: List[Path] = []
+    for run_dir in all_run_dirs:
+
+        wandb_dir: Path = run_dir.joinpath(*wandb_subdir_paths)
+        if not wandb_dir.exists():
+            print(
+                f"Missing 'wandb' folder in directory {run_dir}, skipping directory. If this is a"
+                f" subfolder containing more runs, re-run this script with --results_dir=<dir>"
+                f" to sync runs within this directory."
+            )
+            continue
+
+        wandb_run_folders: List[Path] = []
+        for run_folder in [
+            f
+            for f in Path(wandb_dir).iterdir()
+            if f.is_dir() and f.name.startswith("run-")
+        ]:
+            run_id = run_folder.name.split("-")[-1]
+            if run_id in run_ids:
+                wandb_run_folders.append(run_folder)
+
+        if len(wandb_run_folders) > 0:
+            if (
+                args.force_run_name_match
+                and args.run_names is not None
+                and run_dir.name not in args.run_names
+            ):
+                print(
+                    f"Skipping directory {run_dir.name}, because this is not in specified run names"
+                    f" and --force-run-name-match is present."
+                )
+                continue
+
+            # Sort the run folders by name which will sync from oldest to newest
+            # This shouldn't matter but it's possible it could
+            wandb_run_folders = sorted(wandb_run_folders, key=lambda f: f.name)
+            all_wandb_run_folders.append(wandb_run_folders)
+            all_wandb_dirs.append(wandb_dir)
+
+    # Verify all run folders are unique, and if they're not, tell the user to pass in a different
+    #   path for --results-dir that has unique runs for this run id
+    for idx, (wandb_dir, wandb_run_folders) in enumerate(
+        zip(all_wandb_dirs, all_wandb_run_folders)
+    ):
+        current_folder_strs = [f.name for f in wandb_run_folders]
+        other_folder_strs = [
+            f.name
+            for other_idx, other_run_folders in enumerate(all_wandb_run_folders)
+            for f in other_run_folders
+            if other_idx != idx
+        ]
+        duplicate_run_folders = set(current_folder_strs).intersection(other_folder_strs)
+        if len(duplicate_run_folders) > 0:
+            duplicate_run_dirs = [
+                str(f)
+                for wandb_run_folders in all_wandb_run_folders
+                for f in wandb_run_folders
+                if f.name in duplicate_run_folders
+            ]
+            raise RuntimeError(
+                f"Found duplicate run folder names:\n{pprint.pformat(duplicate_run_folders)}."
+                f"\nAll run folders with these names:\n{pprint.pformat(duplicate_run_dirs)}."
+                f"\nThis means the folder was copied at some point, and syncing duplicates could"
+                f" could lead to issues if the contents of the directories are not identical. Pass"
+                f" in either --force-run-name-match to only use run directories whose folder names"
+                f" match the corresponding --run-names, or use --run-dirs instead to sync just the"
+                f" run dirs that don't contain duplicates."
+            )
+
+    # Clean up any old symlinks
+    missing_symlinks: list[Path] = []
+    for wandb_run_folders in all_wandb_run_folders:
+        for wandb_run_folder in wandb_run_folders:
+            files = Path(wandb_run_folder, "files")
+            for f in files.iterdir():
+                if f.is_symlink() and not f.resolve().exists():
+                    missing_symlinks.append(f)
+
+    if len(missing_symlinks) > 0:
+        if not args.remove_missing_symlinks:
+            raise RuntimeError(
+                f"Found {len(missing_symlinks)} missing symlinks. Cannot sync runs with missing"
+                f" symlinks or errors will be raised. Pass in --remove_missing_symlinks to remove these"
+                f" missing symlinks, or manually delete them to sync the current runs"
+            )
+        for f in missing_symlinks:
+            f.unlink()
+
+    commands: List[List[str]] = []
+    for wandb_dir, wandb_run_folders in zip(all_wandb_dirs, all_wandb_run_folders):
+
+        # Add a symlink from requested checkpoint to latest run dir so it gets uploaded
+        #   when syncing latest run (which is one of the "run-*" folders)
         if args.checkpoint_name is not None:
+            wandb_run_dir = wandb_dir.joinpath("latest-run").resolve()
+            latest_run_id = wandb_run_dir.name.split("-")[-1]
+            if latest_run_id not in run_ids:
+                raise RuntimeError(
+                    f"Latest run has run id {latest_run_id} which does not match any run names"
+                    f": {list(run_name_to_id.keys())}"
+                )
+
             print(
                 f"Creating symbolic link for checkpoing {args.checkpoint_name} to upload file during sync"
             )
 
             # Get the checkpoint we want to upload
             matching_checkpoints = [
-                f for f in subdir.iterdir() if f.name == args.checkpoint_name
+                f for f in wandb_dir.iterdir() if f.name == args.checkpoint_name
             ]
             if len(matching_checkpoints) != 1:
                 print(
-                    f"Failed to find checkpoint {args.checkpoint_name} in directory {subdir}. Skipping directory."
+                    f"Failed to find checkpoint {args.checkpoint_name} in directory {wandb_dir}."
+                    f" Skipping directory."
                 )
                 continue
 
-            # Get the run directory that we should add this to (most recent wandb run directory matching the run id)
-            if subdir.name in run_name_to_id:
-                run_id = run_name_to_id[subdir.name]
-                wandb_run_dirs = [
-                    f
-                    for f in subdir.joinpath("wandb").iterdir()
-                    if f.is_dir() and run_id in f.name
-                ]
-                wandb_run_dirs.sort(key=lambda f: os.path.getmtime(f))
-                wandb_run_dir = wandb_run_dirs[-1]  # Last created
-            else:
-                print(
-                    f"Could not find run {subdir.name} in project runs. Adding checkpoint symlink to latest-run folder"
-                )
-
-            # Create symbolic link from wandb/latest-run/files/<FILENAME> to the checkpoint we want to upload
+            # Create symbolic link from wandb/<run>/files/<FILENAME> to checkpoint we want to upload
             checkpoint = matching_checkpoints[0]
             symlink = wandb_run_dir.joinpath("files", checkpoint.name)
             if not symlink.parent.exists():
@@ -328,31 +517,31 @@ def upload_runs(args: Namespace, checkpoints_only: bool = False):
                 else:
                     os.symlink(src=str(checkpoint), dst=str(symlink))
 
-        # Call 'wandb sync <directory>' on this directory
-        command = [
-            "wandb",
-            "sync",
-            "--project",
-            args.wandb_project,
-            "--entity",
-            args.wandb_entity,
-        ]
+        for run_folder in wandb_run_folders:
+            # Call 'wandb sync <directory>' on this directory
+            command = [
+                "wandb",
+                "sync",
+                "--project",
+                args.wandb_project,
+                "--entity",
+                args.wandb_entity,
+            ]
 
-        if checkpoints_only:
-            # Use current wandb_dir which points to the dir the checkpoint was symlinked to
-            command.extend(["--include-globs", args.checkpoint_name])
-        else:
-            # Use the parent dir and pass --sync-all
-            wandb_run_dir = wandb_run_dir.parent.joinpath("run-*")
-            command.append("--sync-all")
+            if checkpoints_only:
+                # Use current wandb_dir which points to the dir the checkpoint was symlinked to
+                command.extend(["--include-globs", args.checkpoint_name])
 
-        command.append(str(wandb_run_dir))
-        commands.append(command)
+            command.append(str(run_folder))
+            commands.append(command)
 
     if args.dry_run:
         commands_list = [" ".join(command) for command in commands]
         commands_str = "\n".join(commands_list)
-        print(f"Commands to be run (dry-run only):\n{commands_str}")
+        print("- " * 80)
+        print("Commands to be run (dry-run only)")
+        print("- " * 80)
+        print(f"\n{commands_str}")
     else:
         for command in tqdm(commands, desc="Dir"):
             command_str = " ".join(command)
@@ -362,20 +551,6 @@ def upload_runs(args: Namespace, checkpoints_only: bool = False):
 
 if __name__ == "__main__":
     args = parse_args()
-
-    num_flags_set = sum(
-        [
-            args.download_checkpoints,
-            args.download_runs,
-            args.upload_checkpoints,
-            args.upload_runs,
-        ]
-    )
-    if num_flags_set != 1:
-        raise ValueError(
-            "Must set one of the following flags:\n  "
-            "--download_checkpoints, --download_runs, --upload_checkpoints, --upload_runs"
-        )
 
     if args.download_runs:
         download_runs(args, checkpoints_only=False)
