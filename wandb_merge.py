@@ -318,7 +318,7 @@ def merge_runs(args: Namespace) -> None:
     # We may have re-named the folder, so use the current run name if it doesn't match
     work_dir = base_run.config.get("work_dir", None)
     if args.merge_run_save_dir is not None:
-        save_dir = args.merge_run_save_dir
+        save_dir = Path(args.merge_run_save_dir)
     elif work_dir is not None:
         if Path(work_dir).name != base_run.name:
             save_dir = Path(work_dir).with_name(base_run.name)
