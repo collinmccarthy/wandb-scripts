@@ -546,7 +546,12 @@ def upload_runs(args: Namespace, checkpoints_only: bool = False):
         for command in tqdm(commands, desc="Dir"):
             command_str = " ".join(command)
             print(f"Running: {command_str}")
-            subprocess.run(command, check=True)
+
+            # Using subprocess.run(command, check=True) gives "no such file or dir" error
+            # Using subprocess.run(command_str, check=True) gives "no such file or dir" error too
+            # Using subprocess.run(command, shell=True, check=True) gives usage / argparse error
+            # Using subprocess.run(command_str, shell=True, check=True) works
+            subprocess.run(command_str, shell=True, check=True)
 
 
 if __name__ == "__main__":
